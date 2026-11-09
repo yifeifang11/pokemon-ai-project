@@ -66,6 +66,44 @@ class ExperimentScaffoldTests(unittest.TestCase):
         self.assertEqual([row["winner"] for row in rows], ["agent_1", "agent_2", "tie"])
         self.assertEqual([row["turns"] for row in rows], [8, 11, 14])
 
+    def test_battle_summary_metrics_use_each_side(self) -> None:
+        def mon(percent):
+            return SimpleNamespace(
+                max_hp=100,
+                current_hp_fraction=percent / 100,
+            )
+
+        battle_1 = SimpleNamespace(
+            finished=True,
+            won=True,
+            battle_tag="battle-1",
+            turn=3,
+            team={"charizard": mon(40)},
+        )
+        battle_2 = SimpleNamespace(
+            battle_tag="battle-1",
+            team={"blastoise": mon(100)},
+        )
+
+        class Logger:
+            def average_decision_ms(self, tag, agent, slot):
+                return {"agent_1": 1.5, "agent_2": 2.5}[slot]
+
+        rows = completed_battle_rows(
+            SimpleNamespace(battles={"battle-1": battle_1}),
+            experiment_id="run",
+            agent_1="random",
+            pokemon_1="Charizard",
+            agent_2="random",
+            pokemon_2="Blastoise",
+            opposing_player=SimpleNamespace(battles={"battle-1": battle_2}),
+            move_logger=Logger(),
+        )
+        self.assertEqual(rows[0]["agent_1_avg_decision_ms"], 1.5)
+        self.assertEqual(rows[0]["agent_2_avg_decision_ms"], 2.5)
+        self.assertEqual(rows[0]["agent_1_remaining_hp_pct"], 40.0)
+        self.assertEqual(rows[0]["agent_2_remaining_hp_pct"], 100.0)
+
 
 if __name__ == "__main__":
     unittest.main()

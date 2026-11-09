@@ -7,8 +7,8 @@ from pathlib import Path
 import uuid
 
 from poke_env.player import RandomPlayer
-from agents.greedy_agent import GreedyPlayer
 
+from experiments.move_logger import LoggedGreedyPlayer, LoggedRandomPlayer, MoveLogger
 from teams import MATCHUPS, TEAMS
 
 
@@ -23,9 +23,14 @@ CSV_FIELDS = [
     "turns",
     "simulation_budget",
     "duration_seconds",
+    "agent_1_avg_decision_ms",
+    "agent_2_avg_decision_ms",
+    "agent_1_remaining_hp_pct",
+    "agent_2_remaining_hp_pct",
 ]
 AGENT_CHOICES = ("random", "greedy")
 DEFAULT_OUTPUT = Path("results/experiment.csv")
+DEFAULT_MOVE_LOG = Path("experiments/results/move_log.csv")
 
 
 def matchup_name(matchup: tuple[str, str]) -> str:
@@ -33,16 +38,44 @@ def matchup_name(matchup: tuple[str, str]) -> str:
     return f"{matchup[0]}-vs-{matchup[1]}"
 
 
-def create_player(agent_name: str, team: str) -> RandomPlayer | GreedyPlayer:
+def create_player(
+    agent_name: str,
+    team: str,
+    opponent_team: str,
+    move_logger: MoveLogger,
+    agent_slot: str,
+) -> LoggedRandomPlayer | LoggedGreedyPlayer:
     """Build a configured baseline player for a fixed team."""
-    player_class = {"random": RandomPlayer, "greedy": GreedyPlayer}.get(agent_name)
+    player_class = {
+        "random": LoggedRandomPlayer,
+        "greedy": LoggedGreedyPlayer,
+    }.get(agent_name)
     if player_class is None:
         raise ValueError(f"Unknown agent: {agent_name!r}")
     return player_class(
         battle_format="gen9customgame",
         team=team,
         max_concurrent_battles=1,
+        move_logger=move_logger,
+        agent_name=agent_name,
+        agent_slot=agent_slot,
+        pokemon_name=team.splitlines()[0],
+        opponent_name=opponent_team.splitlines()[0],
     )
+
+
+def remaining_hp_pct(battle) -> float | str:
+    """Return exact remaining HP for the fixed one-Pokémon team, if known."""
+    team = getattr(battle, "team", {})
+    if len(team) != 1:
+        return ""
+    pokemon = next(iter(team.values()))
+    if not pokemon.max_hp:
+        return ""
+    fraction = pokemon.current_hp_fraction
+    if not 0 <= fraction <= 1:
+        return ""
+    return round(fraction * 100, 2)
 
 
 def completed_battle_rows(
@@ -53,12 +86,19 @@ def completed_battle_rows(
     pokemon_1: str,
     agent_2: str,
     pokemon_2: str,
+    opposing_player=None,
+    move_logger: MoveLogger | None = None,
 ) -> list[dict[str, object]]:
     """Convert finished poke-env battle objects into one row per battle."""
     rows = []
     for battle in player.battles.values():
         if not battle.finished:
             continue
+        other_battle = (
+            opposing_player.battles.get(battle.battle_tag)
+            if opposing_player is not None
+            else None
+        )
         if battle.won is True:
             winner = "agent_1"
         elif battle.won is False:
@@ -79,6 +119,24 @@ def completed_battle_rows(
                 # MCTS budget and per-battle timing do not apply to this run.
                 "simulation_budget": "",
                 "duration_seconds": "",
+                "agent_1_avg_decision_ms": (
+                    move_logger.average_decision_ms(
+                        battle.battle_tag, agent_1, "agent_1"
+                    )
+                    if move_logger
+                    else ""
+                ),
+                "agent_2_avg_decision_ms": (
+                    move_logger.average_decision_ms(
+                        battle.battle_tag, agent_2, "agent_2"
+                    )
+                    if move_logger
+                    else ""
+                ),
+                "agent_1_remaining_hp_pct": remaining_hp_pct(battle),
+                "agent_2_remaining_hp_pct": (
+                    remaining_hp_pct(other_battle) if other_battle else ""
+                ),
             }
         )
     return rows
@@ -123,12 +181,20 @@ async def run_experiment(
     output_path: Path,
     agent_1: str = "random",
     agent_2: str = "random",
+    move_log_path: Path = DEFAULT_MOVE_LOG,
 ) -> list[dict[str, object]]:
     """Run a matchup, save completed battles, and close both client connections."""
+    if output_path.resolve() == move_log_path.resolve():
+        raise ValueError("Battle results and move logs must use different CSV paths.")
     team_1, team_2 = matchup
     experiment_id = uuid.uuid4().hex
-    player_1 = create_player(agent_1, TEAMS[team_1])
-    player_2 = create_player(agent_2, TEAMS[team_2])
+    move_logger = MoveLogger(move_log_path, experiment_id)
+    player_1 = create_player(
+        agent_1, TEAMS[team_1], TEAMS[team_2], move_logger, "agent_1"
+    )
+    player_2 = create_player(
+        agent_2, TEAMS[team_2], TEAMS[team_1], move_logger, "agent_2"
+    )
     rows: list[dict[str, object]] = []
 
     try:
@@ -141,6 +207,8 @@ async def run_experiment(
             pokemon_1=team_1.title(),
             agent_2=agent_2,
             pokemon_2=team_2.title(),
+            opposing_player=player_2,
+            move_logger=move_logger,
         )
         try:
             if rows:
@@ -177,6 +245,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output", type=Path, default=DEFAULT_OUTPUT, help="New CSV output path."
     )
+    parser.add_argument(
+        "--move-log",
+        type=Path,
+        default=DEFAULT_MOVE_LOG,
+        help="Append per-decision rows to this CSV path.",
+    )
     parser.add_argument("--agent-1", choices=AGENT_CHOICES, default="random")
     parser.add_argument("--agent-2", choices=AGENT_CHOICES, default="random")
     return parser.parse_args()
@@ -199,6 +273,7 @@ def main() -> None:
             args.output,
             args.agent_1,
             args.agent_2,
+            args.move_log,
         )
     )
 

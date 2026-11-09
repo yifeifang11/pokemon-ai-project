@@ -68,8 +68,11 @@ class GreedyPlayer(Player):
             return self.create_order(moves[0], terastallize=False)
 
         # max() is stable, so equal scores resolve by server-provided move order.
-        move = max(
-            moves,
-            key=lambda candidate: expected_damage(candidate, attacker, defender),
+        scored_moves = [
+            (candidate, expected_damage(candidate, attacker, defender))
+            for candidate in moves
+        ]
+        move, self._last_estimated_damage = max(
+            scored_moves, key=lambda scored: scored[1]
         )
         return self.create_order(move, terastallize=False)

@@ -90,11 +90,22 @@ Choose a different `--output` path for each run. For example:
 The runner accepts `--agent-1` and `--agent-2` values `random` and `greedy`.
 Greedy selects the legal move with the highest immediate expected damage using
 power, accuracy, physical or special stats, stat stages, STAB, and type
-effectiveness. It does not model future turns or secondary effects. Each CSV row comes from one
-completed `poke-env` battle object. `winner` is `agent_1`, `agent_2`, or `tie`;
-turn counts are read from the battle. `simulation_budget` and
-`duration_seconds` are blank for Random battles. The installed `poke-env` API
-does not provide reliable per-battle start and end timestamps for a batch.
+effectiveness. It does not model future turns or secondary effects. Each CSV
+row comes from one completed `poke-env` battle object. `winner` is `agent_1`,
+`agent_2`, or `tie`; turn counts are read from the battle. Decision-time and
+remaining-HP metrics are included when available. The experiment runner also
+appends per-decision data to `experiments/results/move_log.csv`; pass
+`--move-log PATH` to select a different log. Repeated runs append with a unique
+`experiment_id`, while battle result files are created without overwriting.
+
+Analyze the battle result files and default move log with:
+
+```sh
+./.venv/bin/python -m experiments.analyze_results
+```
+
+Choose a different log or explicit result files with `--move-log PATH` and
+`--battle-results PATH [PATH ...]`.
 
 ## Project layout
 
