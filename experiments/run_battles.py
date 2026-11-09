@@ -7,6 +7,7 @@ from pathlib import Path
 import uuid
 
 from poke_env.player import RandomPlayer
+from agents.greedy_agent import GreedyPlayer
 
 from teams import MATCHUPS, TEAMS
 
@@ -23,7 +24,7 @@ CSV_FIELDS = [
     "simulation_budget",
     "duration_seconds",
 ]
-AGENT_CHOICES = ("random", "greedy", "mcts")
+AGENT_CHOICES = ("random", "greedy")
 DEFAULT_OUTPUT = Path("results/experiment.csv")
 
 
@@ -32,11 +33,12 @@ def matchup_name(matchup: tuple[str, str]) -> str:
     return f"{matchup[0]}-vs-{matchup[1]}"
 
 
-def create_player(agent_name: str, team: str) -> RandomPlayer:
-    """Build a player for a selected agent; only Random is implemented so far."""
-    if agent_name != "random":
-        raise ValueError(f"The {agent_name!r} agent has not been implemented yet.")
-    return RandomPlayer(
+def create_player(agent_name: str, team: str) -> RandomPlayer | GreedyPlayer:
+    """Build a configured baseline player for a fixed team."""
+    player_class = {"random": RandomPlayer, "greedy": GreedyPlayer}.get(agent_name)
+    if player_class is None:
+        raise ValueError(f"Unknown agent: {agent_name!r}")
+    return player_class(
         battle_format="gen9customgame",
         team=team,
         max_concurrent_battles=1,
@@ -184,12 +186,6 @@ def main() -> None:
     args = parse_args()
     if args.battles < 1:
         raise SystemExit("--battles must be at least 1.")
-    if args.agent_1 != "random" or args.agent_2 != "random":
-        unsupported = [
-            name for name in (args.agent_1, args.agent_2) if name != "random"
-        ]
-        raise SystemExit(f"Not implemented yet: {', '.join(unsupported)}.")
-
     selected_matchup = next(
         matchup for matchup in MATCHUPS if matchup_name(matchup) == args.matchup
     )

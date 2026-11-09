@@ -87,8 +87,10 @@ Choose a different `--output` path for each run. For example:
   --output results/charizard-blastoise-run-2.csv
 ```
 
-The runner accepts `--agent-1` and `--agent-2` values `random`, `greedy`, or
-`mcts`, but only Random agents are implemented. Each CSV row comes from one
+The runner accepts `--agent-1` and `--agent-2` values `random` and `greedy`.
+Greedy selects the legal move with the highest immediate expected damage using
+power, accuracy, physical or special stats, stat stages, STAB, and type
+effectiveness. It does not model future turns or secondary effects. Each CSV row comes from one
 completed `poke-env` battle object. `winner` is `agent_1`, `agent_2`, or `tie`;
 turn counts are read from the battle. `simulation_budget` and
 `duration_seconds` are blank for Random battles. The installed `poke-env` API
@@ -97,7 +99,7 @@ does not provide reliable per-battle start and end timestamps for a batch.
 ## Project layout
 
 - `teams.py`: fixed Showdown teams and the available matchup list.
-- `agents/`: agent implementations; Greedy and MCTS are placeholders.
+- `agents/`: Random and Greedy baseline implementations; MCTS is a placeholder.
 - `simulation/`: battle state and the independent forward-model stub.
 - `experiments/`: battle and experiment entry points.
 - `tests/`: small project tests.
