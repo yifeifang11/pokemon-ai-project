@@ -3,6 +3,16 @@
 _BASE_STATS = "EVs: 0 HP / 0 Atk / 0 Def / 0 SpA / 0 SpD / 0 Spe\n" \
     "IVs: 31 HP / 31 Atk / 31 Def / 31 SpA / 31 SpD / 31 Spe"
 
+_LUCARIO = f"""Lucario
+Level: 50
+Ability: Inner Focus
+Serious Nature
+{_BASE_STATS}
+- Aura Sphere
+- Focus Blast
+- Flash Cannon
+- Dark Pulse"""
+
 TEAMS = {
     "charizard": f"""Charizard
 Level: 50
@@ -31,19 +41,11 @@ Serious Nature
 - Sludge Bomb
 - Earth Power
 - Sleep Powder""",
-    "lucario": f"""Lucario
-Level: 50
-Ability: Steadfast
-Serious Nature
-{_BASE_STATS}
-- Aura Sphere
-- Flash Cannon
-- Extreme Speed
-- Dark Pulse""",
+    "lucario": _LUCARIO,
 }
 
-# These matchups are listed for future runs. The runner requires an explicit
-# matchup; Charizard versus Blastoise is the only one tested so far.
+# Mirror matchup teams are identical, so their effective Speed is identical.
+# Showdown resolves same-priority Speed ties randomly as part of normal play.
 MATCHUPS = [
     ("charizard", "blastoise"),
     ("blastoise", "venusaur"),

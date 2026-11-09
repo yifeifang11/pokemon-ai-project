@@ -75,8 +75,7 @@ To run the reusable experiment runner and save results to CSV:
   --output results/charizard-blastoise.csv
 ```
 
-The matchup is required, so another listed matchup will not run unless selected
-explicitly. Charizard versus Blastoise is the only matchup battle-tested so far.
+The matchup is required, so another listed matchup must be selected explicitly.
 Results are created as a new file; an existing output path is never overwritten.
 Choose a different `--output` path for each run. For example:
 
@@ -87,7 +86,8 @@ Choose a different `--output` path for each run. For example:
   --output results/charizard-blastoise-run-2.csv
 ```
 
-The runner accepts `--agent-1` and `--agent-2` values `random` and `greedy`.
+The runner accepts `--agent-1` and `--agent-2` values `random`, `greedy`, and
+`enhanced_greedy`.
 Greedy selects the legal move with the highest immediate expected damage using
 power, accuracy, physical or special stats, stat stages, STAB, and type
 effectiveness. It does not model future turns or secondary effects. Each CSV
@@ -98,6 +98,54 @@ appends per-decision data to `experiments/results/move_log.csv`; pass
 `--move-log PATH` to select a different log. Repeated runs append with a unique
 `experiment_id`, while battle result files are created without overwriting.
 
+Enhanced Greedy first evaluates expected damage with the same heuristic as
+Basic Greedy. It estimates KO probability from move accuracy and 16 equally
+likely damage rolls (0.85 through 1.00 times estimated on-hit damage). If any
+move has at least 95% KO probability, it selects the move with the highest KO
+probability, breaking ties by expected damage. Otherwise it makes the same
+maximum-expected-damage choice as Basic Greedy. For each Enhanced decision,
+the move log also records Basic Greedy's counterfactual pick from the same
+legal moves, whether the policies disagree, and the KO selection reason.
+
+Run the Enhanced Greedy Lucario comparisons with distinct result files:
+
+```sh
+./.venv/bin/python -m experiments.run_battles \
+  --matchup lucario-vs-lucario --battles 50 \
+  --agent-1 enhanced_greedy --agent-2 random \
+  --output results/lucario-enhanced-random.csv \
+  --move-log experiments/results/lucario-enhanced-moves.csv
+
+./.venv/bin/python -m experiments.run_battles \
+  --matchup lucario-vs-lucario --battles 50 \
+  --agent-1 random --agent-2 enhanced_greedy \
+  --output results/lucario-random-enhanced.csv \
+  --move-log experiments/results/lucario-enhanced-moves.csv
+
+./.venv/bin/python -m experiments.run_battles \
+  --matchup lucario-vs-lucario --battles 50 \
+  --agent-1 enhanced_greedy --agent-2 greedy \
+  --output results/lucario-enhanced-basic.csv \
+  --move-log experiments/results/lucario-enhanced-moves.csv
+
+./.venv/bin/python -m experiments.run_battles \
+  --matchup lucario-vs-lucario --battles 50 \
+  --agent-1 greedy --agent-2 enhanced_greedy \
+  --output results/lucario-basic-enhanced.csv \
+  --move-log experiments/results/lucario-enhanced-moves.csv
+```
+
+Analyze these results and the counterfactual policy comparisons:
+
+```sh
+./.venv/bin/python -m experiments.analyze_results \
+  --battle-results results/lucario-enhanced-random.csv \
+                   results/lucario-random-enhanced.csv \
+                   results/lucario-enhanced-basic.csv \
+                   results/lucario-basic-enhanced.csv \
+  --move-log experiments/results/lucario-enhanced-moves.csv
+```
+
 Analyze the battle result files and default move log with:
 
 ```sh
@@ -106,6 +154,63 @@ Analyze the battle result files and default move log with:
 
 Choose a different log or explicit result files with `--move-log PATH` and
 `--battle-results PATH [PATH ...]`.
+
+### Lucario mirror matchup
+
+Both players receive the identical level 50 Lucario set: Serious nature, Inner
+Focus, 0 EVs in every stat, 31 IVs in every stat, and Aura Sphere, Focus Blast,
+Flash Cannon, and Dark Pulse. There are no items or Terastallization. Both have
+the same effective Speed. These moves have the same priority, so Showdown
+resolves Speed ties randomly through its normal battle rules; the runner does
+not choose which player moves first.
+
+Run a five-battle smoke test first, then the requested 50-battle comparisons
+(each result file is new; the shared move log appends rows with unique
+experiment IDs):
+
+```sh
+./.venv/bin/python -m experiments.run_battles \
+  --matchup lucario-vs-lucario --battles 5 \
+  --agent-1 greedy --agent-2 random \
+  --output results/lucario-greedy-random-smoke.csv \
+  --move-log experiments/results/lucario-mirror-move-log.csv
+
+./.venv/bin/python -m experiments.run_battles \
+  --matchup lucario-vs-lucario --battles 50 \
+  --agent-1 greedy --agent-2 random \
+  --output results/lucario-greedy-random.csv \
+  --move-log experiments/results/lucario-mirror-move-log.csv
+
+./.venv/bin/python -m experiments.run_battles \
+  --matchup lucario-vs-lucario --battles 50 \
+  --agent-1 random --agent-2 greedy \
+  --output results/lucario-random-greedy.csv \
+  --move-log experiments/results/lucario-mirror-move-log.csv
+```
+
+Optional Random versus Random:
+
+```sh
+./.venv/bin/python -m experiments.run_battles \
+  --matchup lucario-vs-lucario --battles 50 \
+  --agent-1 random --agent-2 random \
+  --output results/lucario-random-random.csv \
+  --move-log experiments/results/lucario-mirror-move-log.csv
+```
+
+Analyze the mirror runs and decisions by player position:
+
+```sh
+./.venv/bin/python -m experiments.analyze_results \
+  --battle-results results/lucario-greedy-random.csv \
+                   results/lucario-random-greedy.csv \
+  --move-log experiments/results/lucario-mirror-move-log.csv
+```
+
+Move rows include `player_slot` (`p1` or `p2`) and are joined to the matching
+battle using both `experiment_id` and `battle_tag`. When the logger encounters
+an older move-log header, it preserves a `.pre-enhanced-greedy.bak` copy before
+adding the new slot and KO counterfactual fields.
 
 ## Project layout
 

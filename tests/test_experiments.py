@@ -6,6 +6,10 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
+from poke_env.teambuilder import Teambuilder
+from poke_env.data import GenData
+from poke_env.stats import compute_raw_stats
+
 from experiments.run_battles import CSV_FIELDS, completed_battle_rows, write_results
 from teams import MATCHUPS, TEAMS
 
@@ -16,6 +20,29 @@ class ExperimentScaffoldTests(unittest.TestCase):
         self.assertIn("blastoise", TEAMS)
         self.assertEqual(MATCHUPS[0], ("charizard", "blastoise"))
         self.assertIn("- Flamethrower", TEAMS["charizard"])
+        self.assertIn(("lucario", "lucario"), MATCHUPS)
+
+    def test_lucario_mirror_teams_are_identical_and_valid(self) -> None:
+        p1 = Teambuilder.parse_showdown_team(TEAMS["lucario"])[0]
+        p2 = Teambuilder.parse_showdown_team(TEAMS["lucario"])[0]
+        self.assertEqual(p1.ability, "Inner Focus")
+        self.assertEqual(p1.moves, ["Aura Sphere", "Focus Blast", "Flash Cannon", "Dark Pulse"])
+        self.assertEqual(p1.level, 50)
+        self.assertEqual(p1.nature, "Serious")
+        self.assertIsNone(p1.item)
+        self.assertIsNone(p1.tera_type)
+        self.assertEqual(p1.evs, [0, 0, 0, 0, 0, 0])
+        self.assertEqual(p1.ivs, [31, 31, 31, 31, 31, 31])
+        self.assertEqual(p1.__dict__, p2.__dict__)
+        data = GenData.from_gen(9)
+        stats_1 = compute_raw_stats(
+            "lucario", p1.evs, p1.ivs, p1.level, p1.nature.lower(), data
+        )
+        stats_2 = compute_raw_stats(
+            "lucario", p2.evs, p2.ivs, p2.level, p2.nature.lower(), data
+        )
+        self.assertEqual(stats_1, stats_2)
+        self.assertEqual(stats_1[-1], stats_2[-1])
 
     def test_csv_is_written_once_with_expected_fields(self) -> None:
         row = {field: "" for field in CSV_FIELDS}
@@ -86,8 +113,8 @@ class ExperimentScaffoldTests(unittest.TestCase):
         )
 
         class Logger:
-            def average_decision_ms(self, tag, agent, slot):
-                return {"agent_1": 1.5, "agent_2": 2.5}[slot]
+            def average_decision_ms(self, tag, agent, player_slot):
+                return {"p1": 1.5, "p2": 2.5}[player_slot]
 
         rows = completed_battle_rows(
             SimpleNamespace(battles={"battle-1": battle_1}),

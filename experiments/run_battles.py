@@ -8,7 +8,12 @@ import uuid
 
 from poke_env.player import RandomPlayer
 
-from experiments.move_logger import LoggedGreedyPlayer, LoggedRandomPlayer, MoveLogger
+from experiments.move_logger import (
+    LoggedEnhancedGreedyPlayer,
+    LoggedGreedyPlayer,
+    LoggedRandomPlayer,
+    MoveLogger,
+)
 from teams import MATCHUPS, TEAMS
 
 
@@ -28,7 +33,7 @@ CSV_FIELDS = [
     "agent_1_remaining_hp_pct",
     "agent_2_remaining_hp_pct",
 ]
-AGENT_CHOICES = ("random", "greedy")
+AGENT_CHOICES = ("random", "greedy", "enhanced_greedy")
 DEFAULT_OUTPUT = Path("results/experiment.csv")
 DEFAULT_MOVE_LOG = Path("experiments/results/move_log.csv")
 
@@ -43,12 +48,13 @@ def create_player(
     team: str,
     opponent_team: str,
     move_logger: MoveLogger,
-    agent_slot: str,
-) -> LoggedRandomPlayer | LoggedGreedyPlayer:
+    player_slot: str,
+) -> LoggedRandomPlayer | LoggedGreedyPlayer | LoggedEnhancedGreedyPlayer:
     """Build a configured baseline player for a fixed team."""
     player_class = {
         "random": LoggedRandomPlayer,
         "greedy": LoggedGreedyPlayer,
+        "enhanced_greedy": LoggedEnhancedGreedyPlayer,
     }.get(agent_name)
     if player_class is None:
         raise ValueError(f"Unknown agent: {agent_name!r}")
@@ -58,7 +64,7 @@ def create_player(
         max_concurrent_battles=1,
         move_logger=move_logger,
         agent_name=agent_name,
-        agent_slot=agent_slot,
+        player_slot=player_slot,
         pokemon_name=team.splitlines()[0],
         opponent_name=opponent_team.splitlines()[0],
     )
@@ -121,14 +127,14 @@ def completed_battle_rows(
                 "duration_seconds": "",
                 "agent_1_avg_decision_ms": (
                     move_logger.average_decision_ms(
-                        battle.battle_tag, agent_1, "agent_1"
+                        battle.battle_tag, agent_1, "p1"
                     )
                     if move_logger
                     else ""
                 ),
                 "agent_2_avg_decision_ms": (
                     move_logger.average_decision_ms(
-                        battle.battle_tag, agent_2, "agent_2"
+                        battle.battle_tag, agent_2, "p2"
                     )
                     if move_logger
                     else ""
@@ -190,10 +196,10 @@ async def run_experiment(
     experiment_id = uuid.uuid4().hex
     move_logger = MoveLogger(move_log_path, experiment_id)
     player_1 = create_player(
-        agent_1, TEAMS[team_1], TEAMS[team_2], move_logger, "agent_1"
+        agent_1, TEAMS[team_1], TEAMS[team_2], move_logger, "p1"
     )
     player_2 = create_player(
-        agent_2, TEAMS[team_2], TEAMS[team_1], move_logger, "agent_2"
+        agent_2, TEAMS[team_2], TEAMS[team_1], move_logger, "p2"
     )
     rows: list[dict[str, object]] = []
 
